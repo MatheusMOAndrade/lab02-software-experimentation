@@ -2,7 +2,6 @@ import csv
 import requests
 from datetime import datetime
 import subprocess
-import shutil
 import os
 
 def calculate_age(created_at):
@@ -36,22 +35,27 @@ def read_ck_csv(csv_file):
                 metrics[metric] += int(row[metric])
     return metrics
 
-def write_metric_result(metrics, output_file):
-    with open(output_file, 'w', newline='') as csvfile:
-        fieldnames = ['Metric', 'Total']
+def write_info_ck_csv(metrics, repo_name, output_file):
+    with open(output_file, 'a', newline='') as csvfile:
+        fieldnames = ['Repository name', 'cbo', 'dit', 'lcom', 'loc']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        for metric, total in metrics.items():
-            writer.writerow({'Metric': metric, 'Total': total})
+
+        if os.path.getsize(output_file) == 0:
+            writer.writeheader()
+
+        row_data = {'Repository name': repo_name}
+        for metric in metrics:
+            row_data[metric] = metrics[metric]
+        writer.writerow(row_data)
 
 def download_repository(repo_url):
     os.system(f"git clone {repo_url}")
-
+ 
 def execute_ck(project_dir, output_dir):
     subprocess.run(["java", "-jar", "../ck/target/ck-0.7.1-SNAPSHOT-jar-with-dependencies.jar", project_dir, "true", "0", "true", output_dir])
 
-# def delete_repository(directory):
-    # shutil.rmtree(directory)
+def delete_repository(directory):
+    os.system(f'rmdir /s /q {directory}')
 
 def main():
     token = 'TOKEN'
@@ -89,14 +93,11 @@ def main():
 '''
 
     repositories_info = []
-    # has_next_page = True
     end_cursor = ""
     variables = {}
     repoCont = 0
 
-    # Change "while" to run once
-    # while has_next_page and len(repositories_info) < 1:
-    while len(repositories_info) < 1:
+    while len(repositories_info) < 1000:
         if end_cursor == "":
             query_starter = query.replace(', after: $after', "")
             query_starter = query_starter.replace('($after: String!)', "")
@@ -116,28 +117,26 @@ def main():
             download_repository(repo_url)
 
             # Execute CK
-            execute_ck(f"../lab02-experimentacao-grupo04/{repository_info['Repository name']}", "../lab02-experimentacao-grupo04/scripts/dataset/")
+            execute_ck(f"../lab02-experimentacao-grupo04/{repository_info['Repository name']}", f"../lab02-experimentacao-grupo04/{repository_info['Repository name']}/")
 
             # Read CK CSV and sum metrics
-            csv_file = f"../lab02-experimentacao-grupo04/scripts/dataset/class.csv"
+            csv_file = f"../lab02-experimentacao-grupo04/{repository_info['Repository name']}/class.csv"
             metrics = read_ck_csv(csv_file)
 
             # Write metric result to CSV
-            output_file = f"../lab02-experimentacao-grupo04/scripts/dataset/metricresult.csv"
-            write_metric_result(metrics, output_file)
+            output_file = f"../lab02-experimentacao-grupo04/scripts/dataset/repositories_info_ck.csv"
+            write_info_ck_csv(metrics, repository_info['Repository name'], output_file)
 
             # Delete repository
-            # delete_repository(repository_info['Repository name'])
+            delete_repository(f"{repository_info['Repository name']}")
 
         if data['data']['search']['pageInfo']['hasNextPage']:
             end_cursor = data['data']['search']['pageInfo']['endCursor']
-        # else:
-        #     has_next_page = False
 
         repoCont += 20
 
     # Create csv: 1000 repository list
-    # with open('repositories_info.csv', 'w', newline='') as fp:
+    # with open('repositories_info_graphql.csv', 'w', newline='') as fp:
     #     fieldnames = repositories_info[0].keys()
     #     writer = csv.DictWriter(fp, fieldnames=fieldnames)
         
